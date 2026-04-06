@@ -105,6 +105,8 @@ export function RecipeForm({ initial, sourceType, mode, recipeId, userId, initia
 
     setUploading(true)
     try {
+      // Refresh session in case token expired while page was open
+      await supabase.auth.refreshSession()
       const coverImagePath = await uploadCoverImage()
       const parsedTags = tags.split(',').map(t => t.trim()).filter(Boolean)
 
