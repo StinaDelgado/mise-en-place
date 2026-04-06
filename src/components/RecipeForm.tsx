@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { supabase } from '@/lib/supabase'
 import { useSaveRecipe, useUpdateRecipe } from '@/hooks/useRecipe'
@@ -10,11 +10,12 @@ interface RecipeFormProps {
   mode: 'create' | 'edit'
   recipeId?: string
   userId: string
+  initialCoverImage?: File
 }
 
 const EMPTY_INGREDIENT: Ingredient = { amount: '', amount_decimal: null, unit: '', item: '', note: null }
 
-export function RecipeForm({ initial, sourceType, mode, recipeId, userId }: RecipeFormProps) {
+export function RecipeForm({ initial, sourceType, mode, recipeId, userId, initialCoverImage }: RecipeFormProps) {
   const navigate = useNavigate()
   const saveRecipe = useSaveRecipe()
   const updateRecipe = useUpdateRecipe()
@@ -30,10 +31,22 @@ export function RecipeForm({ initial, sourceType, mode, recipeId, userId }: Reci
   const [tags, setTags] = useState<string>(initial?.tags?.join(', ') ?? '')
   const [notes, setNotes] = useState(initial?.notes ?? '')
   const [editNote, setEditNote] = useState('')
-  const [coverImageFile, setCoverImageFile] = useState<File | null>(null)
+  const [coverImageFile, setCoverImageFile] = useState<File | null>(initialCoverImage ?? null)
+  const [coverImagePreview, setCoverImagePreview] = useState<string | null>(
+    initialCoverImage ? URL.createObjectURL(initialCoverImage) : null
+  )
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (initialCoverImage) {
+      setCoverImageFile(initialCoverImage)
+      const url = URL.createObjectURL(initialCoverImage)
+      setCoverImagePreview(url)
+      return () => URL.revokeObjectURL(url)
+    }
+  }, [initialCoverImage])
 
   function parseAmount(val: string): number | null {
     if (!val) return null
@@ -227,7 +240,25 @@ export function RecipeForm({ initial, sourceType, mode, recipeId, userId }: Reci
       {/* Cover image */}
       <div>
         <label className="block text-sm font-medium mb-1">Cover image</label>
-        <input ref={fileRef} type="file" accept="image/*" onChange={e => setCoverImageFile(e.target.files?.[0] ?? null)} className="text-sm" />
+        {coverImagePreview && (
+          <img src={coverImagePreview} alt="Cover preview" className="w-full h-40 object-cover rounded mb-2" />
+        )}
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*"
+          onChange={e => {
+            const file = e.target.files?.[0] ?? null
+            setCoverImageFile(file)
+            if (file) {
+              const url = URL.createObjectURL(file)
+              setCoverImagePreview(url)
+            } else {
+              setCoverImagePreview(null)
+            }
+          }}
+          className="text-sm"
+        />
       </div>
 
       {/* Edit note (edit mode only) */}
