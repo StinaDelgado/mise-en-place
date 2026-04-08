@@ -113,6 +113,25 @@ async function extractYouTube(url: string) {
   }
 }
 
+function extractOgImage(html: string): string | null {
+  const match =
+    html.match(/<meta[^>]*property="og:image"[^>]*content="([^"]+)"/i) ||
+    html.match(/<meta[^>]*content="([^"]+)"[^>]*property="og:image"/i)
+  return match?.[1] ?? null
+}
+
+function extractJsonLdImage(recipe: Record<string, unknown>): string | null {
+  const image = recipe.image
+  if (!image) return null
+  if (typeof image === 'string') return image
+  if (Array.isArray(image)) {
+    const first = image[0]
+    return typeof first === 'string' ? first : (first as Record<string, unknown>)?.url as string ?? null
+  }
+  if (typeof image === 'object') return (image as Record<string, unknown>).url as string ?? null
+  return null
+}
+
 function findRecipeJsonLd(obj: unknown): Record<string, unknown> | null {
   if (!obj || typeof obj !== 'object') return null
   if (Array.isArray(obj)) {
@@ -152,7 +171,7 @@ async function extractRecipeSite(url: string) {
   })
 
   if (!siteRes.ok) {
-    const blockedSites = ['seriouseats.com', 'bonappetit.com', 'epicurious.com']
+    const blockedSites = ['seriouseats.com', 'bonappetit.com']
     const isBlocked = blockedSites.some(s => url.includes(s))
     if (isBlocked || siteRes.status === 402 || siteRes.status === 403) {
       throw { status: 422, message: `This site blocks automated access. Try taking a screenshot of the recipe and using the Photo tab instead.` }
@@ -160,6 +179,9 @@ async function extractRecipeSite(url: string) {
     throw new Error(`Could not fetch that URL (${siteRes.status}). Check that it's publicly accessible.`)
   }
   const html = await siteRes.text()
+
+  // Extract cover image from og:image (works for all sites)
+  const ogImageUrl = extractOgImage(html)
 
   // Try JSON-LD structured data first
   const jsonLdMatches = [...html.matchAll(/<script[^>]*type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/gi)]
@@ -171,14 +193,17 @@ async function extractRecipeSite(url: string) {
         const normalized = await callGemini(
           `Normalize this schema.org Recipe JSON into our format:\n${JSON.stringify(recipe)}`
         )
+        // Prefer JSON-LD image over og:image
+        const imageUrl = extractJsonLdImage(recipe) || ogImageUrl
+        const thumbnail = imageUrl ? await downloadAsBase64(imageUrl) : null
         return {
           ...normalized,
           source_url: url,
           source_type: 'url_recipe',
           original_content: JSON.stringify(recipe).slice(0, 5000),
           extraction_confidence: 'high',
-          thumbnail_base64: null,
-          thumbnail_mime: null,
+          thumbnail_base64: thumbnail?.base64 ?? null,
+          thumbnail_mime: thumbnail?.mime ?? null,
         }
       }
     } catch { /* try next */ }
@@ -195,14 +220,15 @@ async function extractRecipeSite(url: string) {
     .slice(0, 12000)
 
   const normalized = await callGemini(text)
+  const thumbnail = ogImageUrl ? await downloadAsBase64(ogImageUrl) : null
   return {
     ...normalized,
     source_url: url,
     source_type: 'url_recipe',
     original_content: text.slice(0, 5000),
     extraction_confidence: 'medium',
-    thumbnail_base64: null,
-    thumbnail_mime: null,
+    thumbnail_base64: thumbnail?.base64 ?? null,
+    thumbnail_mime: thumbnail?.mime ?? null,
   }
 }
 
