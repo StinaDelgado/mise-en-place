@@ -105,11 +105,6 @@ export function RecipeForm({ initial, sourceType, mode, recipeId, userId, initia
 
     setUploading(true)
     try {
-      // Get current session and force a token refresh before any DB calls
-      const { data: { session: currentSession } } = await supabase.auth.getSession()
-      if (!currentSession) { navigate({ to: '/login' }); return }
-      const { data: { session: freshSession }, error: refreshError } = await supabase.auth.refreshSession({ refresh_token: currentSession.refresh_token })
-      if (refreshError || !freshSession) { navigate({ to: '/login' }); return }
       const coverImagePath = await uploadCoverImage()
       const parsedTags = tags.split(',').map(t => t.trim()).filter(Boolean)
 

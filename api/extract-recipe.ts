@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
+import { YoutubeTranscript } from 'youtube-transcript'
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY!
 const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY!
@@ -98,7 +99,16 @@ async function extractYouTube(url: string) {
 
   const thumbnail = thumbnailUrl ? await downloadAsBase64(thumbnailUrl) : null
 
-  const content = `Title: ${snippet.title}\n\nDescription: ${snippet.description}`
+  // Try to fetch transcript — much more reliable than description for recipes
+  let transcript = ''
+  try {
+    const lines = await YoutubeTranscript.fetchTranscript(videoId)
+    transcript = lines.map(l => l.text).join(' ')
+  } catch { /* transcript not available, fall back to description */ }
+
+  const content = transcript
+    ? `Title: ${snippet.title}\n\nTranscript: ${transcript.slice(0, 12000)}`
+    : `Title: ${snippet.title}\n\nDescription: ${snippet.description}`
   const recipe = await callGemini(content)
 
   return {
