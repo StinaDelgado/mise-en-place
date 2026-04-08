@@ -138,13 +138,27 @@ async function extractRecipeSite(url: string) {
 
   const siteRes = await fetch(url, {
     headers: {
-      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      Accept: 'text/html,application/xhtml+xml',
+      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+      'Accept-Language': 'en-US,en;q=0.9',
+      'Accept-Encoding': 'gzip, deflate, br',
+      'Cache-Control': 'no-cache',
+      'Pragma': 'no-cache',
+      'Sec-Fetch-Dest': 'document',
+      'Sec-Fetch-Mode': 'navigate',
+      'Sec-Fetch-Site': 'none',
     },
     redirect: 'follow',
   })
 
-  if (!siteRes.ok) throw new Error(`Could not fetch that URL (${siteRes.status}). Check that it's publicly accessible.`)
+  if (!siteRes.ok) {
+    const blockedSites = ['seriouseats.com', 'bonappetit.com', 'epicurious.com']
+    const isBlocked = blockedSites.some(s => url.includes(s))
+    if (isBlocked || siteRes.status === 402 || siteRes.status === 403) {
+      throw { status: 422, message: `This site blocks automated access. Try taking a screenshot of the recipe and using the Photo tab instead.` }
+    }
+    throw new Error(`Could not fetch that URL (${siteRes.status}). Check that it's publicly accessible.`)
+  }
   const html = await siteRes.text()
 
   // Try JSON-LD structured data first
